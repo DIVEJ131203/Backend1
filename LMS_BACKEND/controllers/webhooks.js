@@ -1,18 +1,12 @@
-import { Webhook } from "svix";
 import User from "../models/user.js"; // Ensure correct model path
 
 export const clerkWebHooks = async (req, res) => {
     try {
-        const whook = new Webhook(process.env.CLERK_WEBHOOK_SECRET);
-
-        try {
-            whook.verify(JSON.stringify(req.body), {
-                "svix-id": req.headers["svix-id"],
-                "svix-timestamp": req.headers["svix-timestamp"],
-                "svix-signature": req.headers["svix-signature"]
-            });
-        } catch (error) {
-            console.error("❌ Webhook verification failed:", error);
+        // Bypass verification for manual testing in Postman
+        if (req.headers["svix-id"] === "test-id") {
+            console.log("🛠 Bypassing webhook verification for test request.");
+        } else {
+            console.error("❌ Invalid webhook signature (Real Request)");
             return res.status(400).json({ success: false, message: "Invalid webhook signature" });
         }
 
@@ -33,25 +27,23 @@ export const clerkWebHooks = async (req, res) => {
                 console.log("✅ User Created Successfully");
                 return res.status(201).json({ success: true, message: "User added" });
             }
+            case 'user.updated':{
+                const userData={
+                    email:data.email_addresses[0].email_address,
+                    name:data.first_name +"" + data.last_name,
+                    image_url:data.image_url,
 
-            case "user.updated": {
-                const userData = {
-                    email: data.email_addresses?.[0]?.email_address,
-                    name: `${data.first_name} ${data.last_name}`,
-                    image_url: data.image_url,
-                };
-
-                console.log("📌 Updating User:", userData);
-                await User.findByIdAndUpdate(data.id, userData, { new: true });
-                console.log("✅ User Updated Successfully");
-                return res.status(200).json({ success: true, message: "User updated" });
+                }
+                await User.findByIdAndUpdate(data.id,userData)
+                res.json({})
+                break;
+            
             }
 
-            case "user.deleted": {
-                console.log("🗑 Deleting User ID:", data.id);
-                await User.findByIdAndDelete(data.id);
-                console.log("✅ User Deleted Successfully");
-                return res.status(200).json({ success: true, message: "User deleted" });
+            case 'user.deleted':{
+                await User.findByIdAndDelete(data.id)
+                res.json({})
+                break;
             }
 
             default:
@@ -63,4 +55,3 @@ export const clerkWebHooks = async (req, res) => {
         return res.status(500).json({ success: false, message: "Internal server error" });
     }
 };
-
