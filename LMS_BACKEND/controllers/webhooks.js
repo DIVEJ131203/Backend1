@@ -2,8 +2,8 @@ import User from "../models/user.js"; // Ensure correct model path
 
 export const clerkWebHooks = async (req, res) => {
     try {
-        // Bypass verification for manual testing in Postman
-        if (req.headers["svix-id"] === "test-id") {
+        // Bypass verification for development mode
+        if (process.env.NODE_ENV === "development" && req.headers["svix-id"] === "test-id") {
             console.log("🛠 Bypassing webhook verification for test request.");
         } else {
             console.error("❌ Invalid webhook signature (Real Request)");
@@ -19,7 +19,7 @@ export const clerkWebHooks = async (req, res) => {
                     _id: data.id,
                     email: data.email_addresses?.[0]?.email_address || "no-email",
                     name: `${data.first_name || ""} ${data.last_name || ""}`.trim(),
-                    image_url: data.image_url || "",
+                    image_url: data.image_url || "https://example.com/default-profile.png",
                 };
 
                 console.log("📌 Creating User:", userData);
@@ -27,23 +27,21 @@ export const clerkWebHooks = async (req, res) => {
                 console.log("✅ User Created Successfully");
                 return res.status(201).json({ success: true, message: "User added" });
             }
-            case 'user.updated':{
-                const userData={
-                    email:data.email_addresses[0].email_address,
-                    name:data.first_name +"" + data.last_name,
-                    image_url:data.image_url,
 
-                }
-                await User.findByIdAndUpdate(data.id,userData)
-                res.json({})
-                break;
-            
+            case "user.updated": {
+                const userData = {
+                    email: data.email_addresses?.[0]?.email_address || "no-email",
+                    name: `${data.first_name || ""} ${data.last_name || ""}`.trim(),
+                    image_url: data.image_url || "https://example.com/default-profile.png",
+                };
+
+                await User.findByIdAndUpdate(data.id, userData);
+                return res.json({ success: true, message: "User updated" });
             }
 
-            case 'user.deleted':{
-                await User.findByIdAndDelete(data.id)
-                res.json({})
-                break;
+            case "user.deleted": {
+                await User.findByIdAndDelete(data.id);
+                return res.json({ success: true, message: "User deleted" });
             }
 
             default:
