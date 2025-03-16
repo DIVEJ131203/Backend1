@@ -1,14 +1,14 @@
+import { Webhook } from "svix";
 import User from "../models/user.js"; // Ensure correct model path
 
 export const clerkWebHooks = async (req, res) => {
-    try {
-        // Bypass verification for manual testing in Postman
-        if (req.headers["svix-id"] === "test-id") {
-            console.log("🛠 Bypassing webhook verification for test request.");
-        } else {
-            console.error("❌ Invalid webhook signature (Real Request)");
-            return res.status(400).json({ success: false, message: "Invalid webhook signature" });
-        }
+    try{
+    const whook =new Webhook(process.env.CLERK_WEBHOOK_SECRET)
+    await whook.verify(JSON.stringify(req.body),{
+        "svix-id":req.headers["svix-id"],
+        "svix-timestamp":req.headers["svix-timestamp"],
+        "svix-signature":req.headers["svix-signature"]
+    })
 
         const { data, type } = req.body;
         console.log(`🔄 Webhook Received: ${type}`);
