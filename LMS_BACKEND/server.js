@@ -5,6 +5,16 @@ import ConnectDB from "./configs/mongodb.js";
 import { clerkWebHooks } from "./controllers/webhooks.js";
 
 const app = express();
+app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf.toString(); } }));
+app.use(express.json()); // Ensure JSON parsing
+
+app.use((req, res, next) => {
+    console.log(`🌐 Received Request: ${req.method} ${req.url}`);
+    console.log(`📩 Headers:`, req.headers);
+    console.log(`📦 Body:`, req.body);
+    next();
+});
+
 
 // Async function to start the server
 const startServer = async () => {
