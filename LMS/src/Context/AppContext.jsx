@@ -1,3 +1,4 @@
+import { useAuth, useUser } from '@clerk/clerk-react';
 import humanizeDuration from "humanize-duration";
 import { createContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -13,6 +14,11 @@ export const AppContextProvider = ({ children }) => {
     const [isEducator, setIsEducator] = useState(true); // ✅ Set isEducator to true
 
     const navigate = useNavigate();
+
+    const {getToken}=useAuth()
+    const {user}=useUser()
+
+
 
     // ✅ Fetch all courses (Simulated API Call)
     const fetchAllCourses = async () => {
@@ -58,6 +64,17 @@ export const AppContextProvider = ({ children }) => {
     const calculateNoOfLectures = (course) => {
         return course.courseContent.reduce((acc, chapter) => acc + chapter.chapterContent.length, 0);
     };
+
+const logToken =async()=>{
+    console.log(await getToken());
+}
+
+    useEffect(()=>{
+        if(user){
+            logToken()
+        }
+    },[user])
+
 
     return (
         <AppContext.Provider
