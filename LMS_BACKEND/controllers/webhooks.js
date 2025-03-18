@@ -71,32 +71,36 @@ export const stripeWebhooks = async (req, res) => {
             process.env.STRIPE_WEBHOOK_SECRET
         );
     } catch (err) {
-        console.error("Webhook error:", err.message);
+        console.error("❌ Webhook error:", err.message);
         return res.status(400).send(`Webhook error: ${err.message}`);
     }
 
     try {
         if (event.type === "checkout.session.completed") {
             const session = event.data.object;
+            console.log("🔍 Stripe Metadata:", session.metadata);
+
             const { purchaseId } = session.metadata; // ✅ Retrieve metadata properly
 
             if (!purchaseId) {
-                console.error("Missing purchaseId in metadata");
+                console.error("❌ Missing purchaseId in metadata");
                 return res.status(400).json({ success: false, message: "Missing purchaseId in metadata" });
             }
 
             // ✅ Fetch purchase details
             const purchaseData = await Purchase.findById(purchaseId);
             if (!purchaseData) {
-                console.error(`Purchase not found: ${purchaseId}`);
+                console.error(`❌ Purchase not found: ${purchaseId}`);
                 return res.status(400).json({ success: false, message: "Purchase not found" });
             }
 
-            const userData = await User.findOne(purchaseData.userId);
+            console.log("🔍 Before Update:", purchaseData);
+
+            const userData = await User.findById(purchaseData.userId);
             const courseData = await Course.findById(purchaseData.courseId);
 
             if (!userData || !courseData) {
-                console.error("User or course data missing");
+                console.error("❌ User or course data missing");
                 return res.status(400).json({ success: false, message: "User or Course not found" });
             }
 
@@ -110,6 +114,8 @@ export const stripeWebhooks = async (req, res) => {
             // ✅ Update purchase status
             purchaseData.status = "completed";
             await purchaseData.save();
+
+            console.log("✅ After Update:", await Purchase.findById(purchaseId));
 
             console.log(`✅ Payment successful. User ${userData._id} enrolled in ${courseData._id}`);
         } 
@@ -130,7 +136,7 @@ export const stripeWebhooks = async (req, res) => {
 
         res.json({ received: true });
     } catch (error) {
-        console.error("Webhook processing error:", error.message);
+        console.error("❌ Webhook processing error:", error.message);
         res.status(500).json({ success: false, message: "Webhook processing error" });
     }
 };
