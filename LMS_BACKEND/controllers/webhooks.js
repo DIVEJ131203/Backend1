@@ -92,7 +92,7 @@ export const stripeWebhooks = async (req, res) => {
                 return res.status(400).json({ success: false, message: "Purchase not found" });
             }
 
-            const userData = await User.findById(purchaseData.userId);
+            const userData = await User.findOne(purchaseData.userId);
             const courseData = await Course.findById(purchaseData.courseId);
 
             if (!userData || !courseData) {
