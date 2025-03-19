@@ -11,22 +11,22 @@ import userRouter from "./Routes/userRoutes.js";
 
 const app = express();
 
-// Use express.raw() only for Stripe webhook route
-app.post("/stripe", express.raw({ type: 'application/json' }), stripeWebhooks);
+// Stripe Webhook: Use express.raw() for this route only
+app.post("/stripe", express.raw({ type: "application/json" }), stripeWebhooks);
 
-// Use express.json() globally for all other routes
+// Apply JSON Middleware for all other routes
 app.use(express.json());
 app.use(cors());
 
-// Debugging Middleware
+// Debugging Middleware (avoiding req.body logging for Stripe)
 app.use((req, res, next) => {
     console.log(`🌐 Received Request: ${req.method} ${req.url}`);
     console.log(`📩 Headers:`, req.headers);
-    console.log(`📦 Body:`, req.body);
+    if (req.url !== "/stripe") console.log(`📦 Body:`, req.body); // Avoid raw body logging
     next();
 });
 
-// Now, apply Clerk Middleware (so it doesn’t interfere with Stripe)
+// Apply Clerk Middleware AFTER Stripe webhook but BEFORE routes
 app.use(clerkMiddleware());
 
 // Async function to start the server
@@ -35,18 +35,22 @@ const startServer = async () => {
         await ConnectDB();
         console.log("✅ MongoDB Connected Successfully");
         await connectCloudinary();
+        console.log("✅ Cloudinary Connected Successfully");
 
-        // Routes should be added after DB is connected
-        app.use('/api/educator', educatorRouter);
-        app.use('/api/course', courseRouter);
-        app.use('/api/user', userRouter);
-        
+        // Routes (added after successful DB connection)
+        app.use("/api/educator", educatorRouter);
+        app.use("/api/course", courseRouter);
+        app.use("/api/user", userRouter);
+
+        // Clerk Webhooks
         app.post("/clerk", clerkWebHooks);
 
+        // Root Route
         app.get("/", (req, res) => {
             res.send("API Working");
         });
 
+        // Start Server
         const PORT = process.env.PORT || 5000;
         app.listen(PORT, () => {
             console.log(`🚀 Server running on port ${PORT}`);
