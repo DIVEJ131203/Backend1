@@ -66,7 +66,11 @@ export const stripeWebhooks = async (req, res) => {
     console.log("🚀 Incoming Webhook Request...");
 
     try {
-        event = stripeInstance.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+        event = stripeInstance.webhooks.constructEvent(
+            req.body,
+            sig,
+            process.env.STRIPE_WEBHOOK_SECRET
+        );
         console.log("✅ Stripe Webhook Verified:", event.type);
     } catch (err) {
         console.error("❌ Stripe Webhook Signature Error:", err.message);
@@ -78,7 +82,7 @@ export const stripeWebhooks = async (req, res) => {
             const session = event.data.object;
             console.log("🔍 Stripe Metadata Received:", session.metadata);
 
-            const { purchaseId } = session.metadata;
+            const { purchaseId } = session.metadata; // ✅ Extract `purchaseId`
 
             if (!purchaseId) {
                 console.error("❌ Missing purchaseId in metadata");
@@ -88,7 +92,7 @@ export const stripeWebhooks = async (req, res) => {
             console.log(`🛒 Looking for Purchase ID: ${purchaseId}`);
 
             // ✅ Fetch purchase details
-            let purchaseData = await Purchase.findById(purchaseId);
+            const purchaseData = await Purchase.findById(purchaseId);
             if (!purchaseData) {
                 console.error(`❌ Purchase not found for ID: ${purchaseId}`);
                 return res.status(400).json({ success: false, message: "Purchase not found" });
@@ -111,7 +115,7 @@ export const stripeWebhooks = async (req, res) => {
             console.log("👤 Found User:", userData);
             console.log("📚 Found Course:", courseData);
 
-            // ✅ Add user to enrolled students if not already present
+            // ✅ Add user to enrolled students
             if (!courseData.enrolledStudents.includes(userData._id)) {
                 courseData.enrolledStudents.push(userData._id);
                 await courseData.save();
@@ -120,7 +124,7 @@ export const stripeWebhooks = async (req, res) => {
                 console.log(`⚠️ User ${userData._id} already enrolled in course ${courseData._id}`);
             }
 
-            // ✅ Add course to user's enrolled courses if not already present
+            // ✅ Add course to user's enrolled courses
             if (!userData.enrolledCourses.includes(courseData._id)) {
                 userData.enrolledCourses.push(courseData._id);
                 await userData.save();
@@ -130,15 +134,18 @@ export const stripeWebhooks = async (req, res) => {
             }
 
             // ✅ Update purchase status using `findByIdAndUpdate`
-            purchaseData = await Purchase.findByIdAndUpdate(purchaseId, { status: "completed" }, { new: true });
+            console.log("📦 Updating purchase status...");
+            await Purchase.findByIdAndUpdate(
+                purchaseId,
+                { status: "completed" },
+                { new: true } // ✅ Ensures updated document is returned
+            );
 
             console.log("✅ Purchase status updated successfully!");
-            console.log("📦 Purchase Data After Update:", purchaseData);
+            console.log("📦 Purchase Data After Update:", await Purchase.findById(purchaseId));
 
             console.log(`✅ Payment successful. User ${userData._id} enrolled in ${courseData._id}`);
-        } 
-        
-        else if (event.type === "checkout.session.async_payment_failed") {
+        } else if (event.type === "checkout.session.async_payment_failed") {
             const session = event.data.object;
             const { purchaseId } = session.metadata;
 
@@ -147,8 +154,10 @@ export const stripeWebhooks = async (req, res) => {
                 const purchaseData = await Purchase.findById(purchaseId);
                 if (purchaseData) {
                     console.log(`❌ Marking purchase ${purchaseId} as failed`);
-                    purchaseData.status = "failed";
-                    await purchaseData.save();
+                    await Purchase.updateOne(
+                        { _id: purchaseId },
+                        { $set: { status: "failed" } }
+                    );
                 }
             }
             console.log(`❌ Payment failed for purchaseId: ${purchaseId}`);
