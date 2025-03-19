@@ -63,12 +63,11 @@ export const stripeWebhooks = async (req, res) => {
     const sig = req.headers["stripe-signature"];
     let event;
 
+    console.log("🚀 Incoming Webhook Request...");
+
     try {
-        event = stripeInstance.webhooks.constructEvent(
-            req.body, 
-            sig,
-            process.env.STRIPE_WEBHOOK_SECRET
-        );
+        event = stripeInstance.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+        console.log("✅ Stripe Webhook Verified:", event.type);
     } catch (err) {
         console.error("❌ Stripe Webhook Signature Error:", err.message);
         return res.status(400).send(`Webhook error: ${err.message}`);
@@ -79,22 +78,22 @@ export const stripeWebhooks = async (req, res) => {
             const session = event.data.object;
             console.log("🔍 Stripe Metadata Received:", session.metadata);
 
-            const { purchaseId } = session.metadata; // ✅ Extract `purchaseId`
+            const { purchaseId } = session.metadata;
 
             if (!purchaseId) {
                 console.error("❌ Missing purchaseId in metadata");
                 return res.status(400).json({ success: false, message: "Missing purchaseId in metadata" });
             }
 
-            console.log(`🛒 Looking for Purchase: ${purchaseId}`);
+            console.log(`🛒 Looking for Purchase ID: ${purchaseId}`);
 
             // ✅ Fetch purchase details
-            const purchaseData = await Purchase.findById(purchaseId);
+            let purchaseData = await Purchase.findById(purchaseId);
             if (!purchaseData) {
                 console.error(`❌ Purchase not found for ID: ${purchaseId}`);
                 return res.status(400).json({ success: false, message: "Purchase not found" });
             }
-            console.log("📦 Found Purchase Data:", purchaseData);
+            console.log("📦 Purchase Data Before Update:", purchaseData);
 
             // ✅ Fetch user and course
             const userData = await User.findById(purchaseData.userId);
@@ -112,7 +111,7 @@ export const stripeWebhooks = async (req, res) => {
             console.log("👤 Found User:", userData);
             console.log("📚 Found Course:", courseData);
 
-            // ✅ Add user to enrolled students
+            // ✅ Add user to enrolled students if not already present
             if (!courseData.enrolledStudents.includes(userData._id)) {
                 courseData.enrolledStudents.push(userData._id);
                 await courseData.save();
@@ -121,7 +120,7 @@ export const stripeWebhooks = async (req, res) => {
                 console.log(`⚠️ User ${userData._id} already enrolled in course ${courseData._id}`);
             }
 
-            // ✅ Add course to user's enrolled courses
+            // ✅ Add course to user's enrolled courses if not already present
             if (!userData.enrolledCourses.includes(courseData._id)) {
                 userData.enrolledCourses.push(courseData._id);
                 await userData.save();
@@ -130,11 +129,11 @@ export const stripeWebhooks = async (req, res) => {
                 console.log(`⚠️ Course ${courseData._id} already in user ${userData._id} list`);
             }
 
-            // ✅ Update purchase status
-            purchaseData.status = "completed";
-            await purchaseData.save();
+            // ✅ Update purchase status using `findByIdAndUpdate`
+            purchaseData = await Purchase.findByIdAndUpdate(purchaseId, { status: "completed" }, { new: true });
 
-            console.log("📦 Updated Purchase Data:", await Purchase.findById(purchaseId));
+            console.log("✅ Purchase status updated successfully!");
+            console.log("📦 Purchase Data After Update:", purchaseData);
 
             console.log(`✅ Payment successful. User ${userData._id} enrolled in ${courseData._id}`);
         } 
@@ -143,9 +142,11 @@ export const stripeWebhooks = async (req, res) => {
             const session = event.data.object;
             const { purchaseId } = session.metadata;
 
+            console.log("⚠️ Payment Failed Event Received");
             if (purchaseId) {
                 const purchaseData = await Purchase.findById(purchaseId);
                 if (purchaseData) {
+                    console.log(`❌ Marking purchase ${purchaseId} as failed`);
                     purchaseData.status = "failed";
                     await purchaseData.save();
                 }
