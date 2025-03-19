@@ -11,10 +11,11 @@ import userRouter from "./Routes/userRoutes.js";
 
 const app = express();
 
-// Place Clerk Middleware First
-app.use(clerkMiddleware());
+// Use express.raw() only for Stripe webhook route
+app.post("/stripe", express.raw({ type: 'application/json' }), stripeWebhooks);
 
-app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf.toString(); } }));
+// Use express.json() globally for all other routes
+app.use(express.json());
 app.use(cors());
 
 // Debugging Middleware
@@ -25,6 +26,9 @@ app.use((req, res, next) => {
     next();
 });
 
+// Now, apply Clerk Middleware (so it doesn’t interfere with Stripe)
+app.use(clerkMiddleware());
+
 // Async function to start the server
 const startServer = async () => {
     try {
@@ -34,11 +38,11 @@ const startServer = async () => {
 
         // Routes should be added after DB is connected
         app.use('/api/educator', educatorRouter);
-        app.use('/api/course',express.json(),courseRouter)
-        app.use('/api/user',express.json(),userRouter)
-        app.post("/stripe",express.raw({type:'application/json'}),stripeWebhooks)
-        app.post("/clerk", clerkWebHooks);
+        app.use('/api/course', courseRouter);
+        app.use('/api/user', userRouter);
         
+        app.post("/clerk", clerkWebHooks);
+
         app.get("/", (req, res) => {
             res.send("API Working");
         });
