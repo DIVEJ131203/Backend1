@@ -1,4 +1,3 @@
-import mongoose from "mongoose";
 import Stripe from "stripe";
 import { Webhook } from "svix";
 import Course from "../models/course.js";
@@ -117,8 +116,8 @@ export const stripeWebhooks = async (request, response) => {
                 console.log("👤 Found User:", userData);
                 console.log("📚 Found Course:", courseData);
 
-                // ✅ Fix: Convert user ID to ObjectId before adding to enrolledStudents
-                const userObjectId = new mongoose.Types.ObjectId(userData._id);
+                // ✅ Fix: Keep user ID as a string (no ObjectId conversion)
+                const userObjectId = userData._id;
 
                 // ✅ Add user to enrolled students
                 if (!courseData.enrolledStudents.includes(userObjectId)) {
@@ -187,3 +186,4 @@ export const stripeWebhooks = async (request, response) => {
         response.status(500).json({ success: false, message: "Webhook processing error" });
     }
 };
+
