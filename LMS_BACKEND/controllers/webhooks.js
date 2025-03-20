@@ -116,8 +116,13 @@ export const stripeWebhooks = async (request, response) => {
                 console.log("👤 Found User:", userData);
                 console.log("📚 Found Course:", courseData);
 
-                // ✅ Fix: Keep user ID as a string (no ObjectId conversion)
-                const userObjectId = userData._id;
+                // 🔍 Debugging enrolledStudents field
+                if (!Array.isArray(courseData.enrolledStudents)) {
+                    console.error("⚠️ `enrolledStudents` is missing or undefined in DB. Initializing it.");
+                    courseData.enrolledStudents = [];
+                }
+
+                const userObjectId = new mongoose.Types.ObjectId(userData._id);
 
                 // ✅ Add user to enrolled students
                 if (!courseData.enrolledStudents.includes(userObjectId)) {
@@ -126,6 +131,12 @@ export const stripeWebhooks = async (request, response) => {
                     console.log(`✅ User ${userData._id} enrolled in course ${courseData._id}`);
                 } else {
                     console.log(`⚠️ User ${userData._id} already enrolled in course ${courseData._id}`);
+                }
+
+                // 🔍 Debugging enrolledCourses field
+                if (!Array.isArray(userData.enrolledCourses)) {
+                    console.error("⚠️ `enrolledCourses` is missing or undefined in DB. Initializing it.");
+                    userData.enrolledCourses = [];
                 }
 
                 // ✅ Add course to user's enrolled courses
@@ -148,42 +159,14 @@ export const stripeWebhooks = async (request, response) => {
                 break;
             }
 
-            case 'payment_intent.payment_failed': {
-                const paymentIntent = event.data.object;
-                const paymentIntentId = paymentIntent.id;
-
-                console.log(`🔍 Fetching session data for Failed Payment Intent: ${paymentIntentId}`);
-
-                const session = await stripeInstance.checkout.sessions.list({
-                    payment_intent: paymentIntentId
-                });
-
-                if (!session.data.length) {
-                    console.error("❌ No session found for Payment Intent:", paymentIntentId);
-                    return response.status(400).json({ success: false, message: "No session found" });
-                }
-
-                const { purchaseId } = session.data[0].metadata;
-                const purchaseData = await Purchase.findById(purchaseId);
-                if (!purchaseData) {
-                    console.error(`❌ Purchase not found for ID: ${purchaseId}`);
-                    return response.status(400).json({ success: false, message: "Purchase not found" });
-                }
-
-                purchaseData.status = "failed";
-                await purchaseData.save();
-                console.log(`❌ Payment failed. Purchase ID: ${purchaseId}`);
-                break;
-            }
-
             default:
                 console.log(`⚠️ Unhandled event type: ${event.type}`);
         }
 
         response.json({ received: true });
     } catch (error) {
-        console.error("❌ Webhook processing error:", error.message);
-        response.status(500).json({ success: false, message: "Webhook processing error" });
+        console.error("❌ Webhook processing error:", error);
+        response.status(500).json({ success: false, message: "Webhook processing error", error: error.message });
     }
 };
 
