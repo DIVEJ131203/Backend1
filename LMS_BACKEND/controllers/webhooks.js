@@ -1,11 +1,9 @@
-import mongoose from "mongoose";
 import Stripe from "stripe";
 import { Webhook } from "svix";
 import Course from "../models/course.js";
 import Purchase from "../models/purchase.js";
 import User from "../models/user.js"; // Ensure correct model path
 
-// ✅ Clerk Webhooks
 export const clerkWebHooks = async (req, res) => {
     try {
         const whook = new Webhook(process.env.CLERK_WEBHOOK_SECRET);
@@ -35,29 +33,28 @@ export const clerkWebHooks = async (req, res) => {
             case 'user.updated': {
                 const userData = {
                     email: data.email_addresses[0].email_address,
-                    name: `${data.first_name} ${data.last_name}`,
+                    name: data.first_name + " " + data.last_name,
                     image_url: data.image_url,
                 };
                 await User.findByIdAndUpdate(data.id, userData);
-                return res.json({});
+                res.json({});
+                break;
             }
             case 'user.deleted': {
                 await User.findByIdAndDelete(data.id);
-                return res.json({});
+                res.json({});
+                break;
             }
             default:
                 console.warn("⚠️ Unhandled Webhook Type:", type);
                 return res.status(400).json({ success: false, message: "Unhandled event type" });
         }
     } catch (error) {
-        console.error("❌ Clerk Webhook Processing Error:", error.message);
+        console.error("❌ Webhook Processing Error:", error.message);
         return res.status(500).json({ success: false, message: "Internal server error" });
     }
 };
 
-const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY);
-
-// ✅ Stripe Webhooks
 export const stripeWebhooks = async (request, response) => {
     const sig = request.headers['stripe-signature'];
     let event;
@@ -65,7 +62,7 @@ export const stripeWebhooks = async (request, response) => {
     console.log("🚀 Incoming Webhook Request...");
 
     try {
-        event = stripeInstance.webhooks.constructEvent(
+        event = Stripe.webhooks.constructEvent(
             request.body,
             sig,
             process.env.STRIPE_WEBHOOK_SECRET
@@ -80,25 +77,27 @@ export const stripeWebhooks = async (request, response) => {
         switch (event.type) {
             case 'payment_intent.succeeded': {
                 const paymentIntent = event.data.object;
-                const sessionId = paymentIntent.metadata?.session_id;
-                const purchaseId = paymentIntent.metadata?.purchaseId;
+                console.log("🔄 PaymentIntent Object:", paymentIntent);
 
-                if (!sessionId || !purchaseId) {
-                    console.error("❌ Missing session ID or purchase ID in metadata.");
-                    return response.status(400).json({ success: false, message: "Missing required metadata" });
+                // ✅ Ensure metadata is correctly passed
+                const { purchaseId, session_id } = paymentIntent.metadata || {};
+                if (!purchaseId || !session_id) {
+                    console.error("❌ Missing metadata in PaymentIntent:", paymentIntent.metadata);
+                    return response.status(400).json({ success: false, message: "Missing metadata" });
                 }
 
-                console.log(`📦 Fetching session data for Session ID: ${sessionId}`);
+                console.log(`📦 Purchase ID: ${purchaseId}, Session ID: ${session_id}`);
 
-                // ✅ Fetch session details properly
-                const session = await stripeInstance.checkout.sessions.retrieve(sessionId);
+                // ✅ Fetch session details
+                const session = await stripeInstance.checkout.sessions.retrieve(session_id);
                 if (!session) {
-                    console.error("❌ No session found for Session ID:", sessionId);
+                    console.error("❌ No session found for Session ID:", session_id);
                     return response.status(400).json({ success: false, message: "No session found" });
                 }
 
-                console.log(`📦 Purchase ID from metadata: ${purchaseId}`);
+                console.log("🎟️ Checkout Session Retrieved:", session);
 
+                // ✅ Fetch Purchase, User, and Course data
                 const purchaseData = await Purchase.findById(purchaseId);
                 if (!purchaseData) {
                     console.error(`❌ Purchase not found for ID: ${purchaseId}`);
@@ -111,60 +110,57 @@ export const stripeWebhooks = async (request, response) => {
                     return response.status(400).json({ success: false, message: "User not found" });
                 }
 
-                const courseData = await Course.findById(purchaseData.courseId.toString());
+                const courseData = await Course.findById(purchaseData.courseId);
                 if (!courseData) {
                     console.error(`❌ Course not found: ${purchaseData.courseId}`);
                     return response.status(400).json({ success: false, message: "Course not found" });
                 }
 
-                console.log("👤 Found User:", userData);
-                console.log("📚 Found Course:", courseData);
+                console.log("👤 User:", userData);
+                console.log("📚 Course:", courseData);
 
-                // ✅ Ensure enrolledStudents array exists
+                // ✅ Ensure `enrolledStudents` exists
                 if (!Array.isArray(courseData.enrolledStudents)) {
-                    console.warn("⚠️ `enrolledStudents` is missing. Initializing it.");
+                    console.warn("⚠️ `enrolledStudents` not found. Initializing...");
                     courseData.enrolledStudents = [];
                 }
 
-                const userObjectId = new mongoose.Types.ObjectId(userData._id);
-
-                // ✅ Enroll user in course
-                if (!courseData.enrolledStudents.includes(userObjectId.toString())) {
+                const userObjectId = userData._id.toString();
+                
+                // ✅ Enroll User in Course
+                if (!courseData.enrolledStudents.includes(userObjectId)) {
                     courseData.enrolledStudents.push(userObjectId);
                     await courseData.save();
-                    console.log(`✅ User ${userData._id} enrolled in course ${courseData._id}`);
+                    console.log(`✅ User ${userObjectId} enrolled in course ${courseData._id}`);
                 } else {
-                    console.log(`⚠️ User ${userData._id} already enrolled in course ${courseData._id}`);
+                    console.log(`⚠️ User ${userObjectId} already enrolled in course ${courseData._id}`);
                 }
 
-                // ✅ Ensure enrolledCourses array exists
+                // ✅ Ensure `enrolledCourses` exists
                 if (!Array.isArray(userData.enrolledCourses)) {
-                    console.warn("⚠️ `enrolledCourses` is missing. Initializing it.");
+                    console.warn("⚠️ `enrolledCourses` not found. Initializing...");
                     userData.enrolledCourses = [];
                 }
 
-                // ✅ Add course to user's enrolled courses
+                // ✅ Add Course to User
                 if (!userData.enrolledCourses.includes(courseData._id.toString())) {
                     userData.enrolledCourses.push(courseData._id);
                     await userData.save();
-                    console.log(`✅ Course ${courseData._id} added to user ${userData._id}`);
+                    console.log(`✅ Course ${courseData._id} added to user ${userObjectId}`);
                 } else {
-                    console.log(`⚠️ Course ${courseData._id} already in user ${userData._id} list`);
+                    console.log(`⚠️ Course ${courseData._id} already in user ${userObjectId} list`);
                 }
 
-                // ✅ Update purchase status
+                // ✅ Update Purchase Status
                 console.log("📦 Updating purchase status...");
-                await Purchase.updateOne(
-                    { _id: purchaseId },
-                    { $set: { status: "completed" } }
-                );
+                await Purchase.findByIdAndUpdate(purchaseId, { status: "completed" });
 
                 console.log("✅ Purchase status updated successfully!");
                 break;
             }
 
             default:
-                console.log(`⚠️ Unhandled event type: ${event.type}`);
+                console.warn(`⚠️ Unhandled event type: ${event.type}`);
         }
 
         response.json({ received: true });
