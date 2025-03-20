@@ -5,6 +5,7 @@ import Course from "../models/course.js";
 import Purchase from "../models/purchase.js";
 import User from "../models/user.js"; // Ensure correct model path
 
+// ✅ Clerk Webhooks
 export const clerkWebHooks = async (req, res) => {
     try {
         const whook = new Webhook(process.env.CLERK_WEBHOOK_SECRET);
@@ -34,30 +35,29 @@ export const clerkWebHooks = async (req, res) => {
             case 'user.updated': {
                 const userData = {
                     email: data.email_addresses[0].email_address,
-                    name: data.first_name + " " + data.last_name,
+                    name: `${data.first_name} ${data.last_name}`,
                     image_url: data.image_url,
                 };
                 await User.findByIdAndUpdate(data.id, userData);
-                res.json({});
-                break;
+                return res.json({});
             }
             case 'user.deleted': {
                 await User.findByIdAndDelete(data.id);
-                res.json({});
-                break;
+                return res.json({});
             }
             default:
                 console.warn("⚠️ Unhandled Webhook Type:", type);
                 return res.status(400).json({ success: false, message: "Unhandled event type" });
         }
     } catch (error) {
-        console.error("❌ Webhook Processing Error:", error.message);
+        console.error("❌ Clerk Webhook Processing Error:", error.message);
         return res.status(500).json({ success: false, message: "Internal server error" });
     }
 };
 
 const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY);
 
+// ✅ Stripe Webhooks
 export const stripeWebhooks = async (request, response) => {
     const sig = request.headers['stripe-signature'];
     let event;
@@ -65,7 +65,7 @@ export const stripeWebhooks = async (request, response) => {
     console.log("🚀 Incoming Webhook Request...");
 
     try {
-        event = Stripe.webhooks.constructEvent(
+        event = stripeInstance.webhooks.constructEvent(
             request.body,
             sig,
             process.env.STRIPE_WEBHOOK_SECRET
@@ -80,20 +80,23 @@ export const stripeWebhooks = async (request, response) => {
         switch (event.type) {
             case 'payment_intent.succeeded': {
                 const paymentIntent = event.data.object;
-                const paymentIntentId = paymentIntent.id;
+                const sessionId = paymentIntent.metadata?.session_id;
+                const purchaseId = paymentIntent.metadata?.purchaseId;
 
-                console.log(`🔍 Fetching session data for Payment Intent: ${paymentIntentId}`);
+                if (!sessionId || !purchaseId) {
+                    console.error("❌ Missing session ID or purchase ID in metadata.");
+                    return response.status(400).json({ success: false, message: "Missing required metadata" });
+                }
 
-                const session = await stripeInstance.checkout.sessions.list({
-                    payment_intent: paymentIntentId
-                });
+                console.log(`📦 Fetching session data for Session ID: ${sessionId}`);
 
-                if (!session.data.length) {
-                    console.error("❌ No session found for Payment Intent:", paymentIntentId);
+                // ✅ Fetch session details properly
+                const session = await stripeInstance.checkout.sessions.retrieve(sessionId);
+                if (!session) {
+                    console.error("❌ No session found for Session ID:", sessionId);
                     return response.status(400).json({ success: false, message: "No session found" });
                 }
 
-                const { purchaseId } = session.data[0].metadata;
                 console.log(`📦 Purchase ID from metadata: ${purchaseId}`);
 
                 const purchaseData = await Purchase.findById(purchaseId);
@@ -117,16 +120,16 @@ export const stripeWebhooks = async (request, response) => {
                 console.log("👤 Found User:", userData);
                 console.log("📚 Found Course:", courseData);
 
-                // 🔍 Debugging enrolledStudents field
+                // ✅ Ensure enrolledStudents array exists
                 if (!Array.isArray(courseData.enrolledStudents)) {
-                    console.error("⚠️ `enrolledStudents` is missing or undefined in DB. Initializing it.");
+                    console.warn("⚠️ `enrolledStudents` is missing. Initializing it.");
                     courseData.enrolledStudents = [];
                 }
 
                 const userObjectId = new mongoose.Types.ObjectId(userData._id);
 
-                // ✅ Add user to enrolled students
-                if (!courseData.enrolledStudents.includes(userObjectId)) {
+                // ✅ Enroll user in course
+                if (!courseData.enrolledStudents.includes(userObjectId.toString())) {
                     courseData.enrolledStudents.push(userObjectId);
                     await courseData.save();
                     console.log(`✅ User ${userData._id} enrolled in course ${courseData._id}`);
@@ -134,14 +137,14 @@ export const stripeWebhooks = async (request, response) => {
                     console.log(`⚠️ User ${userData._id} already enrolled in course ${courseData._id}`);
                 }
 
-                // 🔍 Debugging enrolledCourses field
+                // ✅ Ensure enrolledCourses array exists
                 if (!Array.isArray(userData.enrolledCourses)) {
-                    console.error("⚠️ `enrolledCourses` is missing or undefined in DB. Initializing it.");
+                    console.warn("⚠️ `enrolledCourses` is missing. Initializing it.");
                     userData.enrolledCourses = [];
                 }
 
                 // ✅ Add course to user's enrolled courses
-                if (!userData.enrolledCourses.includes(courseData._id)) {
+                if (!userData.enrolledCourses.includes(courseData._id.toString())) {
                     userData.enrolledCourses.push(courseData._id);
                     await userData.save();
                     console.log(`✅ Course ${courseData._id} added to user ${userData._id}`);
@@ -170,4 +173,3 @@ export const stripeWebhooks = async (request, response) => {
         response.status(500).json({ success: false, message: "Webhook processing error", error: error.message });
     }
 };
-
