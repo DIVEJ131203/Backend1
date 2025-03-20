@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Stripe from "stripe";
 import { Webhook } from "svix";
 import Course from "../models/course.js";
