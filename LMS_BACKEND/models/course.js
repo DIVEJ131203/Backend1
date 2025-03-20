@@ -25,10 +25,10 @@ const courseSchema = new mongoose.Schema({
     discount: { type: Number, required: true, min: 0, max: 100 },
     courseContent: [chapterSchema],
     courseRatings: [
-        { userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, rating: { type: Number, min: 1, max: 5 } }
+        { userId: { type: String, ref: 'User' }, rating: { type: Number, min: 1, max: 5 } }
     ],
-    educator: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }, // ✅ FIXED
-    enrolledStudents: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }] // ✅ FIXED
+    educator: { type: String, ref: 'User', required: true }, // ✅ FIXED
+    enrolledStudents: [{ type: String, ref: 'User' }] // ✅ FIXED
 }, { timestamps: true, minimize: false });
 
 const Course = mongoose.model('Course', courseSchema);
