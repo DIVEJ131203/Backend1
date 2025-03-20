@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Stripe from "stripe";
 import { Webhook } from "svix";
 import Course from "../models/course.js";
@@ -116,37 +117,51 @@ export const stripeWebhooks = async (request, response) => {
                 console.log("👤 Found User:", userData);
                 console.log("📚 Found Course:", courseData);
 
-                // Ensure `enrolledStudents` is initialized
+                // 🔍 Debugging enrolledStudents field
                 if (!Array.isArray(courseData.enrolledStudents)) {
                     console.error("⚠️ `enrolledStudents` is missing or undefined in DB. Initializing it.");
                     courseData.enrolledStudents = [];
                 }
 
-                // Add user ID to `enrolledStudents` only if it's not already present
-                if (!courseData.enrolledStudents.includes(userData._id)) {
-                    courseData.enrolledStudents.push(userData._id); // Add user ID as a string
-                    await courseData.save();
-                    console.log(`✅ User ${userData._id} enrolled in course ${courseData._id}`);
+                if (mongoose.Types.ObjectId.isValid(userData._id)) {
+                    const userObjectId = new mongoose.Types.ObjectId(userData._id);
+
+                    // ✅ Add user to enrolled students
+                    if (!courseData.enrolledStudents.includes(userObjectId)) {
+                        courseData.enrolledStudents.push(userObjectId);
+                        await courseData.save();
+                        console.log(`✅ User ${userData._id} enrolled in course ${courseData._id}`);
+                    } else {
+                        console.log(`⚠️ User ${userData._id} already enrolled in course ${courseData._id}`);
+                    }
                 } else {
-                    console.log(`⚠️ User ${userData._id} already enrolled in course ${courseData._id}`);
+                    console.error(`Invalid ObjectId for user: ${userData._id}`);
+                    // Handle the error
                 }
 
-                // Ensure `enrolledCourses` is initialized
+                // 🔍 Debugging enrolledCourses field
                 if (!Array.isArray(userData.enrolledCourses)) {
                     console.error("⚠️ `enrolledCourses` is missing or undefined in DB. Initializing it.");
                     userData.enrolledCourses = [];
                 }
 
-                // Add course ID to user's `enrolledCourses` only if it's not already present
-                if (!userData.enrolledCourses.includes(courseData._id.toString())) {
-                    userData.enrolledCourses.push(courseData._id.toString()); // Add course ID as a string
-                    await userData.save();
-                    console.log(`✅ Course ${courseData._id} added to user ${userData._id}`);
+                if (mongoose.Types.ObjectId.isValid(courseData._id)) {
+                    const courseObjectId = new mongoose.Types.ObjectId(courseData._id);
+
+                    // ✅ Add course to user's enrolled courses
+                    if (!userData.enrolledCourses.includes(courseObjectId)) {
+                        userData.enrolledCourses.push(courseObjectId);
+                        await userData.save();
+                        console.log(`✅ Course ${courseData._id} added to user ${userData._id}`);
+                    } else {
+                        console.log(`⚠️ Course ${courseData._id} already in user ${userData._id} list`);
+                    }
                 } else {
-                    console.log(`⚠️ Course ${courseData._id} already in user ${userData._id} list`);
+                    console.error(`Invalid ObjectId for course: ${courseData._id}`);
+                    // Handle the error
                 }
 
-                // Update purchase status
+                // ✅ Update purchase status
                 console.log("📦 Updating purchase status...");
                 await Purchase.updateOne(
                     { _id: purchaseId },
