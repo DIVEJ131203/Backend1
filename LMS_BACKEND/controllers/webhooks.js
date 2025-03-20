@@ -1,4 +1,3 @@
-import mongoose from "mongoose";
 import Stripe from "stripe";
 import { Webhook } from "svix";
 import Course from "../models/course.js";
@@ -123,20 +122,13 @@ export const stripeWebhooks = async (request, response) => {
                     courseData.enrolledStudents = [];
                 }
 
-                if (mongoose.Types.ObjectId.isValid(userData._id)) {
-                    const userObjectId = new mongoose.Types.ObjectId(userData._id);
-
-                    // ✅ Add user to enrolled students
-                    if (!courseData.enrolledStudents.includes(userObjectId)) {
-                        courseData.enrolledStudents.push(userObjectId);
-                        await courseData.save();
-                        console.log(`✅ User ${userData._id} enrolled in course ${courseData._id}`);
-                    } else {
-                        console.log(`⚠️ User ${userData._id} already enrolled in course ${courseData._id}`);
-                    }
+                // Handle user ID as a string since it's not a valid ObjectId
+                if (!courseData.enrolledStudents.includes(userData._id)) {
+                    courseData.enrolledStudents.push(userData._id);
+                    await courseData.save();
+                    console.log(`✅ User ${userData._id} enrolled in course ${courseData._id}`);
                 } else {
-                    console.error(`Invalid ObjectId for user: ${userData._id}`);
-                    // Handle the error
+                    console.log(`⚠️ User ${userData._id} already enrolled in course ${courseData._id}`);
                 }
 
                 // 🔍 Debugging enrolledCourses field
@@ -145,20 +137,12 @@ export const stripeWebhooks = async (request, response) => {
                     userData.enrolledCourses = [];
                 }
 
-                if (mongoose.Types.ObjectId.isValid(courseData._id)) {
-                    const courseObjectId = new mongoose.Types.ObjectId(courseData._id);
-
-                    // ✅ Add course to user's enrolled courses
-                    if (!userData.enrolledCourses.includes(courseObjectId)) {
-                        userData.enrolledCourses.push(courseObjectId);
-                        await userData.save();
-                        console.log(`✅ Course ${courseData._id} added to user ${userData._id}`);
-                    } else {
-                        console.log(`⚠️ Course ${courseData._id} already in user ${userData._id} list`);
-                    }
+                if (!userData.enrolledCourses.includes(courseData._id)) {
+                    userData.enrolledCourses.push(courseData._id);
+                    await userData.save();
+                    console.log(`✅ Course ${courseData._id} added to user ${userData._id}`);
                 } else {
-                    console.error(`Invalid ObjectId for course: ${courseData._id}`);
-                    // Handle the error
+                    console.log(`⚠️ Course ${courseData._id} already in user ${userData._id} list`);
                 }
 
                 // ✅ Update purchase status
@@ -176,6 +160,7 @@ export const stripeWebhooks = async (request, response) => {
                 console.log(`⚠️ Unhandled event type: ${event.type}`);
         }
 
+        // Return a successful response before performing additional logic
         response.json({ received: true });
     } catch (error) {
         console.error("❌ Webhook processing error:", error);
