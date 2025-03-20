@@ -8,7 +8,7 @@ const userSchema = new mongoose.Schema(
         image_url: { type: String, default: "https://example.com/default-profile.png" }
 , // 🟢 "image_url" ki spelling match karo
         enrolledCourses: [{
-            type: mongoose.Schema.Types.ObjectId,
+            type: String,
             ref: 'Course'
         }]
     },
