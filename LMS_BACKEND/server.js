@@ -1,66 +1,36 @@
-import { clerkMiddleware } from "@clerk/express";
-import cors from "cors";
-import "dotenv/config";
-import express from "express";
-import connectCloudinary from "./configs/cloudinary.js";
-import ConnectDB from "./configs/mongodb.js";
-import { clerkWebHooks, stripeWebhooks } from "./controllers/webhooks.js";
-import courseRouter from "./Routes/courseRoutes.js";
-import educatorRouter from "./Routes/educatorRoutes.js";
-import userRouter from "./Routes/userRoutes.js";
+import { clerkMiddleware } from '@clerk/express'
+import cors from 'cors'
+import 'dotenv/config'
+import express from 'express'
+import connectCloudinary from './configs/cloudinary.js'
+import connectDB from './configs/mongodb.js'
+import { clerkWebhooks, stripeWebhooks } from './controllers/webhooks.js'
+import courseRouter from './Routes/courseRoutes.js'
+import educatorRouter from './Routes/educatorRoutes.js'
+import userRouter from './Routes/userRoutes.js'
 
-const app = express();
+// Initialize Express
+const app = express()
 
-// Stripe Webhook: Use express.raw() for this route only
-app.post("/stripe", express.raw({ type: "application/json" }), stripeWebhooks);
+// Connect to database
+await connectDB()
+await connectCloudinary()
 
-// Apply JSON Middleware for all other routes
-app.use(express.json());
-app.use(cors());
+// Middlewares
+app.use(cors())
+app.use(clerkMiddleware())
 
-// Debugging Middleware (avoiding req.body logging for Stripe)
-app.use((req, res, next) => {
-    console.log(`🌐 Received Request: ${req.method} ${req.url}`);
-    console.log(`📩 Headers:`, req.headers);
-    if (req.url !== "/stripe") console.log(`📦 Body:`, req.body); // Avoid raw body logging
-    next();
-});
+// Routes
+app.get('/', (req, res) => res.send("API Working"))
+app.post('/clerk', express.json() , clerkWebhooks)
+app.post('/stripe', express.raw({ type: 'application/json' }), stripeWebhooks)
+app.use('/api/educator', express.json(), educatorRouter)
+app.use('/api/course', express.json(), courseRouter)
+app.use('/api/user', express.json(), userRouter)
 
-// Apply Clerk Middleware AFTER Stripe webhook but BEFORE routes
-app.use(clerkMiddleware());
+// Port
+const PORT = process.env.PORT || 5000
 
-// Async function to start the server
-const startServer = async () => {
-    try {
-        await ConnectDB();
-        console.log("✅ MongoDB Connected Successfully");
-        await connectCloudinary();
-        console.log("✅ Cloudinary Connected Successfully");
-
-        // Routes (added after successful DB connection)
-        app.use("/api/educator", educatorRouter);
-        app.use("/api/course", courseRouter);
-        app.use("/api/user", userRouter);
-
-        // Clerk Webhooks
-        app.post("/clerk", clerkWebHooks);
-
-        // Root Route
-        app.get("/", (req, res) => {
-            res.send("API Working");
-        });
-
-        // Start Server
-        const PORT = process.env.PORT || 5000;
-        app.listen(PORT, () => {
-            console.log(`🚀 Server running on port ${PORT}`);
-        });
-
-    } catch (error) {
-        console.error("❌ Database Connection Failed:", error);
-        process.exit(1);
-    }
-};
-
-// Start the server
-startServer();
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+})

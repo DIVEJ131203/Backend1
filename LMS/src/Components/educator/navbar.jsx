@@ -1,28 +1,25 @@
 import { UserButton, useUser } from '@clerk/clerk-react';
-import React from 'react';
+import React, { useContext } from 'react';
 import { Link } from 'react-router-dom';
 import { assets } from '../../assets/assets';
+import { AppContext } from '../../context/AppContext';
 
-const Navbar = () => {
-    const { user } = useUser();
+const Navbar = ({ bgColor }) => {
 
-    return (
-        <div className="flex items-center justify-between px-4 md:px-8 border-b border-gray-500 py-3">
-            <Link to="/">
-                <img src={assets.logo} alt="Logo" className="w-28 lg:w-32" />
-            </Link>
-            <div className="flex items-center gap-5 text-gray-500 relative">
-                <p>
-                    Hi! {user ? user.fullName : "Guest"}
-                </p>
-                {user ? (
-                    <UserButton afterSignOutUrl="/" />
-                ) : (
-                    <img src={assets.profile_img} alt="Profile" className="w-10 h-10 rounded-full" />
-                )}
-            </div>
-        </div>
-    );
+  const { isEducator } = useContext(AppContext)
+  const { user } = useUser()
+
+  return isEducator && user && (
+    <div className={`flex items-center justify-between px-4 md:px-8 border-b border-gray-500 py-3 ${bgColor}`}>
+      <Link to="/">
+        <img src={assets.logo} alt="Logo" className="w-28 lg:w-32" />
+      </Link>
+      <div className="flex items-center gap-5 text-gray-500 relative">
+        <p>Hi! {user.fullName}</p>
+        <UserButton />
+      </div>
+    </div>
+  );
 };
 
 export default Navbar;
